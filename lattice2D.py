@@ -139,6 +139,96 @@ def shift(A,n,axis=0,method=0):
 		return B
 
 
+################### 2D band structure ############################
+""" Taken from bands.py """
+
+def dia2(q,bs,amps,n,ys=[0,0,0],M=True,DP=[0.,0.]):
+	'''Returns a k-space matrix Hamiltonian for an optical lattice.
+		* q is a vector in the 1st Brillioun zone.
+		* bs is a 2-tuple of k-space basis vectors
+		* amps is a 3-iterable of amplitudes.  amps[0] and amps[1] 
+			correspond to bs[0] and bs[1], and amps[2] corresponds to
+			-bs[1]-bs[2]
+		* y is a 3-iterable of phases.  The correspondence is as for amps.
+		* DP is a momentum shift, so the kinetic term of the Hamiltonian
+			becomes (p-DP)**2/2m, or (p-DP)**2 in our units.
+		* n is the wavevector cutoff
+		The lattice Schrodinger equation is given explicitly by:
+			i hbar dc(p)/dt = P^2/2m c(p) + Sum_{j=0}^{3} amps[j]/2 * (exp(1j*ys[j]) c(p-bs[j]) + exp(-1j*ys[j]) c(p+bs[j]))
+		By default (M=True), a matrix is returned.  The matrix operates
+		on vectors c[i] defined so that c[i] is the coefficient of 
+		exp[ ((-n+(i mod(2n+1)))*bs[0]+q).r) + (((-n+floor(i/(2n+1)))*bs[1]+q).r) ]]
+		in a Fourier expansion of the wavefunction.
+		
+		[Formerly, I had written 
+		(-n+(i mod(2n+1)))exp((bs[0]+q).r) + (-n+floor(i/(2n+1)))exp((bs[1]+q).r)
+		 instead of the above expression, but I think this was incorrect.]
+		'''
+	
+	N=2*n+1						# The Hamiltonian matrix will be of size N^2 by N^2
+	idx = arange(N**2)			# Indices for the vectors
+	# dia is the kinetic part of the Hamiltonian
+	dia = (q[0] + bs[0][0]*(-n+mod(idx,N))+bs[1][0]*(-n+floor(idx/N)) - DP[0])**2 + \
+			(q[1] + bs[0][1]*(-n+mod(idx,N))+bs[1][1]*(-n+floor(idx/N)) - DP[1])**2
+	
+	# The M's below capture the potential part of the Hamiltonian
+	d1 = ones(N,float); d2 = ones(N-1,float);
+	Mup = sparse.diags([d1*amps[1]/2.*exp(-1.j*ys[1]),d2*amps[2]/2.*exp(1.j*ys[2])],[0,1])
+	Mdn = sparse.diags([d1*amps[1]/2.*exp(1.j*ys[1]),d2*amps[2]/2.*exp(-1.j*ys[2])],[0,-1])
+	M0  = sparse.diags([d2*amps[0]/2.*exp(-1.j*ys[0]),d2*amps[0]/2.*exp(1.j*ys[0])],[1,-1])
+	Mkin = sparse.diags(dia,0)
+	
+	# Each k below corresponds to an M above, and will be used in a Kronecker product below
+	kup = sparse.diags(d2,1)
+	kdn = sparse.diags(d2,-1)
+	k0 	= sparse.diags(d1,0)
+	
+	M = Mkin + sparse.kron(k0,M0) + sparse.kron(kup,Mup) + sparse.kron(kdn,Mdn)
+	
+	return M
+
+def eigs2(q,bs,amps,nbands,ys=[0,0,0],n=None,returnM=False,wind=False,DP=[0.,0.]):
+	'''Returns nbands number of eigenvectors/values for quasimomentum q.
+		bs are reciprocal lattice basis vectors (there should be 2), 
+		amps are amplitudes (there should be three), and n (if supplied)
+		is the wavevector cutoff (so eigenvectors have length 2n+1).  
+		If not supplied, n is taken to be nbands.
+		q may not be iterable.
+		If returnM is True, then the lattice Hamiltonian matrix is also returned. 
+		If wind is True, then the eigenvectors are wound into square matrices.
+			Otherwise, they are (unwound) column vectors. 
+		'''
+	if n is None:
+		n = nbands
+	M = dia2(q,bs,amps,n,ys,DP)			# Get the Hamiltonian matrix
+	# Amin is the bottom of the lattice potential, and a lower bound on the eigenenergies.  This is needed for eigsh
+	Amin = -abs(amps[0])-abs(amps[1])-abs(amps[2])
+	eigvals,eigvecs = eigsh(M,nbands,sigma=Amin)
+	s = argsort(eigvals)
+	eigvals = (eigvals[s])[:nbands]
+	eigvecs = (eigvecs[:,s])[:,:nbands]
+	
+	if wind:
+		eigmats = zeros((nbands,2*n+1,2*n+1),dtype=complex)
+		for i in range(nbands):
+			eigmats[i] = reshape(eigvecs[:,i],(2*n+1,2*n+1),'F')
+		eigvecs = eigmats
+	if returnM:
+		return eigvals,eigvecs,M
+	else:
+		return eigvals,eigvecs
+
+def wind(c):
+	'''Takes a vector of 2D momentum coefficients and turns them into 
+		a matrix, or vice versa.'''
+	
+	if len(c.shape) == 1:		# This means we have a vector
+		n = sqrt(len(c))
+		return reshape(c,(n,n),'F')
+	if len(c.shape) == 2:
+		return ravel(c,'F')
+
+
 ############ momentum space ###########
 def HParams(k1=None,w1=None,y1=None,E1=None,		# First laser's k-vector, frequency, phase, and amplitude
 			k2=None,w2=None,y2=None,E2=None,		# Second laser
@@ -310,19 +400,6 @@ def psolver(ham,q=[0.,0.],T=arange(0,2,.02),dt0=.01,n=5,init=None,aa=1.0,talk='s
 	return c0, Px[newaxis] - pgx, Py[newaxis] - pgy
 
 ##################### Time steppers ################
-def Euler(coef0,D,t0,t1,nsteps):
-	"""Integrate coef from time t0 to t1 in nsteps Euler steps
-		D is a function of coef and time t, returning the derivative
-		of coef at that time."""
-	coef = coef0
-	nsteps = int(nsteps)
-	if nsteps <= 0:
-		raise ValueError("Number of steps for stepper must be positive.")
-	dt = (t1-t0)/nsteps
-	for i in range(nsteps):
-		t = t0*(nsteps-i)/nsteps + t1*i/nsteps
-		coef += dt*D(coef,t)
-	return coef
 
 def midpoint(coef0,D,t0,t1,nsteps):
 	"""Integrate coef from time t0 to t1 in nsteps midpoint steps
@@ -338,92 +415,6 @@ def midpoint(coef0,D,t0,t1,nsteps):
 		coef += dt*D(coef+dt*D(coef,t)/2.,t+dt/2.)
 	return coef
 
-################### 2D band structure ############################
-""" Taken from bands.py """
-
-def dia2(q,bs,amps,n,ys=[0,0,0],M=True):
-	'''Returns a k-space matrix Hamiltonian for an optical lattice.
-		* q is a vector in the 1st Brillioun zone.
-		* bs is a 2-tuple of k-space basis vectors
-		* amps is a 3-iterable of amplitudes.  amps[0] and amps[1] 
-			correspond to bs[0] and bs[1], and amps[2] corresponds to
-			-bs[1]-bs[2]
-		* y is a 3-iterable of phases.  The correspondence is as for amps.
-		* n is the wavevector cutoff
-		The lattice Schrodinger equation is given explicitly by:
-			i hbar dc(p)/dt = P^2/2m c(p) + Sum_{j=0}^{3} amps[j]/2 * (exp(1j*ys[j]) c(p-bs[j]) + exp(-1j*ys[j]) c(p+bs[j]))
-		By default (M=True), a matrix is returned.  The matrix operates
-		on vectors c[i] defined so that c[i] is the coefficient of 
-		exp[ ((-n+(i mod(2n+1)))*bs[0]+q).r) + (((-n+floor(i/(2n+1)))*bs[1]+q).r) ]]
-		in a Fourier expansion of the wavefunction.
-		
-		[Formerly, I had written 
-		(-n+(i mod(2n+1)))exp((bs[0]+q).r) + (-n+floor(i/(2n+1)))exp((bs[1]+q).r)
-		 instead of the above expression, but I think this was incorrect.]
-		'''
-	
-	N=2*n+1						# The Hamiltonian matrix will be of size N^2 by N^2
-	idx = arange(N**2)			# Indices for the vectors
-	# dia is the kinetic part of the Hamiltonian
-	dia = (q[0] + bs[0][0]*(-n+mod(idx,N))+bs[1][0]*(-n+floor(idx/N)))**2 + \
-			(q[1] + bs[0][1]*(-n+mod(idx,N))+bs[1][1]*(-n+floor(idx/N)))**2
-	
-	# The M's below capture the potential part of the Hamiltonian
-	d1 = ones(N,float); d2 = ones(N-1,float);
-	Mup = sparse.diags([d1*amps[1]/2.*exp(-1.j*ys[1]),d2*amps[2]/2.*exp(1.j*ys[2])],[0,1])
-	Mdn = sparse.diags([d1*amps[1]/2.*exp(1.j*ys[1]),d2*amps[2]/2.*exp(-1.j*ys[2])],[0,-1])
-	M0  = sparse.diags([d2*amps[0]/2.*exp(-1.j*ys[0]),d2*amps[0]/2.*exp(1.j*ys[0])],[1,-1])
-	Mkin = sparse.diags(dia,0)
-	
-	# Each k below corresponds to an M above, and will be used in a Kronecker product below
-	kup = sparse.diags(d2,1)
-	kdn = sparse.diags(d2,-1)
-	k0 	= sparse.diags(d1,0)
-	
-	M = Mkin + sparse.kron(k0,M0) + sparse.kron(kup,Mup) + sparse.kron(kdn,Mdn)
-	
-	return M
-
-def eigs2(q,bs,amps,nbands,ys=[0,0,0],n=None,returnM=False,wind=False):
-	'''Returns nbands number of eigenvectors/values for quasimomentum q.
-		bs are reciprocal lattice basis vectors (there should be 2), 
-		amps are amplitudes (there should be three), and n (if supplied)
-		is the wavevector cutoff (so eigenvectors have length 2n+1).  
-		If not supplied, n is taken to be nbands.
-		q may not be iterable.
-		If returnM is True, then the lattice Hamiltonian matrix is also returned. 
-		If wind is True, then the eigenvectors are wound into square matrices.
-			Otherwise, they are (unwound) column vectors. 
-		'''
-	if n is None:
-		n = nbands
-	M = dia2(q,bs,amps,n,ys)			# Get the Hamiltonian matrix
-	# Amin is the bottom of the lattice potential, and a lower bound on the eigenenergies.  This is needed for eigsh
-	Amin = -abs(amps[0])-abs(amps[1])-abs(amps[2])
-	eigvals,eigvecs = eigsh(M,nbands,sigma=Amin)
-	s = argsort(eigvals)
-	eigvals = (eigvals[s])[:nbands]
-	eigvecs = (eigvecs[:,s])[:,:nbands]
-	
-	if wind:
-		eigmats = zeros((nbands,2*n+1,2*n+1),dtype=complex)
-		for i in range(nbands):
-			eigmats[i] = reshape(eigvecs[:,i],(2*n+1,2*n+1),'F')
-		eigvecs = eigmats
-	if returnM:
-		return eigvals,eigvecs,M
-	else:
-		return eigvals,eigvecs
-
-def wind(c):
-	'''Takes a vector of 2D momentum coefficients and turns them into 
-		a matrix, or vice versa.'''
-	
-	if len(c.shape) == 1:		# This means we have a vector
-		n = sqrt(len(c))
-		return reshape(c,(n,n),'F')
-	if len(c.shape) == 2:
-		return ravel(c,'F')
 
 ################### Visualizers ##################
 
@@ -621,7 +612,40 @@ def SProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False):
 			print('step {} of {}'.format(i,L))
 		out[i] = SFrame(c[j],px[j],py[j],ham,T[j],band=band)
 	return out
-	
+
+def nFrame(c,px,py,ham,t,band,T=None):
+	if T is not None:
+		c = c[t]; px = px[t]; py = py[t]; t = T[t];
+	k = ham['k']; A = ham['A']; w = ham['w']; y = ham['y'];
+	kDual = dual(k,1.)								# Note normalization is 1, not 2*pi
+	if not hasattr(band,'__len__'): band = array([band])
+	N = c.shape[0]; n = (N-1)/2
+	q = [px[n,n],py[n,n]]
+	evec = eigs2(q,k.T,A(t),amax(band)+1,n=n,wind=True)[1]
+	out = []
+	for i in band:
+		out.append( abs(sum( evec[i].conj()*c ))**2 )
+	return array(out)
+
+def nProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False):
+	if not c.shape==px.shape==py.shape and c.shape[0]==len(T):
+		raise ValueError('c, px, py, and T do not have consistent shapes.')
+	L = c.shape[0]
+	if not hasattr(band,'__len__'):
+		band = array([band])
+	else:
+		band = array(band)
+	nb = band.shape[0]
+	idx = range(L)[idx]
+	L = len(idx)
+	out = zeros((L,nb))
+	for i in range(L):
+		j = idx[i]
+		if talk:
+			print('step {} of {}'.format(i,L))
+		out[i] = nFrame(c[j],px[j],py[j],ham,T[j],band)
+	return out
+
 """
 def qProj(c,px,py,ham,t=None,band=0,q=None,show=False):
 	'''Projects onto lattice eigenstates for quasimomentum q.

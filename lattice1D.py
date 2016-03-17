@@ -21,10 +21,10 @@ mu0 = 4.e-7*pi
 eta0 = 377					# Impedance of free space
 g = 9.81					# Earth's gravitational acceleration
 M2 = 2*1.455e-25			# 2*Sr mass in kg
-d0 = 461.e-9
-#d00 = 461.e-9				# A typical length scale in meters (Sr transition wavelength)
-#d0 = d00/(2*pi)				# NOTE: THIS IS THE RIGHT CHARACTERISTIC LENGTH FOR LATTICE RECOIL UNITS!
-#k0 = 1./d0					# Sr transition k-vector length
+#d0 = 461.e-9
+lam0 = 461.e-9				# A typical length scale in meters (Sr transition wavelength)
+d0 = lam0/(2*pi)			# NOTE: THIS IS THE RIGHT CHARACTERISTIC LENGTH FOR LATTICE RECOIL UNITS!
+k0 = 1./d0					# Sr transition k-vector length
 mu = 2.58e-29				# Sr 461 dipole strength in meter second Amperes
 fSr = C/d0					# Sr 461 transition frequency in Hz					= 6.503 e14
 wSr = fSr*2*pi				# Sr 461 transition angular frequency				= 4.086 e15
@@ -55,7 +55,7 @@ Etyp = sqrt(2*dtn0*gSr)		# Corresponding typical electric field = 2.07e5 in 461 
 
 # Default laser parameters:
 sk1=1.0; sk2 = -1.0
-sE1 = 2.e5; sE2 = 2.e5;			####### NEED TO CHECK AGAINST GRAVITY IN Sr UNITS
+sE1 = Etyp; sE2 = Etyp;			####### NEED TO CHECK AGAINST GRAVITY IN Sr UNITS
 sy1 = 0; sy2 = 0;			# Phase
 sw1 = wSr0 + dtn0; sw2 = lambda t: wSr0 + dtn0 + 10*t; 		# Angular frequency
 # NOTE: 'Angular frequency' w is really (1/t) * int_0^t W(t')dt', where W(t') is the true instantaneous angular frequency
@@ -391,7 +391,7 @@ def Dt(f,t0,dt=1.e-6):
 	'''Time derivative of f(t) at t0.'''
 	return (f(t0+dt) - f(t0-dt))/(2.*dt)
 
-def LFrame(c,p,t,ham,T=None,band=None):
+def LFrame(c,p,ham,t,T=None,band=None):
 	if T is not None:		# This indicates t is an index, and T[t] is the corresponding time
 		c = c[t]; p = p[t]; t = T[t]
 	k = ham['k']; A = ham['A']; y = ham['y']; w = ham['w']; dwdt = Dt(w,t)
@@ -399,7 +399,7 @@ def LFrame(c,p,t,ham,T=None,band=None):
 	c2 = exp(1j*v**2*t/4.)*exp(1j*p*v*t) * c
 	p2 = p - v/2.
 	if band is None:
-		return v2,p2
+		return c2,p2
 	else:				# If band is supplied, we dot the state into lattice frame eigenstates
 		if not hasattr(band,'__len__'):
 			band = array([band])
@@ -412,7 +412,45 @@ def LFrame(c,p,t,ham,T=None,band=None):
 			out.append(abs(sum(evecs[:,i].dot(c2)))**2)
 		return array(out)
 
-		"""
+def SFrame(c,p,ham,t,T=None,band=None):
+	if T is not None:
+		c = c[t]; p = p[t]; t = T[t]
+	k = ham['k']; A = ham['A']; y = ham['y']; w = ham['w'];
+	B = lambda tau: (w(tau)*tau - y(tau))/k
+	dBdt = Dt(B,t)
+	c2 = exp(1j*B(t)*p)*c		# This ignores an overall phase exp(-1j*int_0^t (.5*m*dbdt^2))
+	p2 = p-.5*dBdt
+	if band is None:
+		return c2,p2
+	else:
+		if not hasattr(band,'__len__'):
+			band = array([band])
+		N = c2.shape[0]; n = (N-1)/2
+		q = p[n]
+		evecs = eigs1(q,k,A(t),amax(band)+1,n)[1]
+		out = []
+		for i in range(len(band)):
+			out.append(abs(sum(evecs[:,i].dot(c2)))**2)
+		return array(out)
+
+def SProj(c,p,ham,T,idx=slice(None),band=0,talk=False):
+	if not c.shape==p.shape and c.shape[0]==len(T):
+		raise ValueError('c, p, and T do not have consistent shapes.')
+	L = c.shape[0]
+	if not hasattr(band,'__len__'):
+		band = array([band])
+	nb = band.shape[0]
+	idx = range(L)[idx]
+	L = len(idx)
+	out = zeros((L,nb))
+	for j in range(L):
+		if talk:
+			print('step {} of {}'.format(j,L))
+		i = idx[j]
+		out[j] = SFrame(c[i],p[i],ham,T[i],band=band)
+	return out
+
+"""
 def Eproj(c,p,t,ham,T=None,band=5):
 	'''Project onto lattice eigenstates.'''
 	if not hasattr(band,'__len__'):
