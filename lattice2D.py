@@ -36,54 +36,55 @@ from scipy.linalg import expm
 from scipy.sparse.linalg import eigsh
 import numbers
 
-# MKS units:
-hbar = 1.05457e-34
-C = 299792458.0
-eps0 = 8.85418782e-12
-mu0 = 4.e-7*pi
-eta0 = 377					# Impedance of free space
-g = 9.81					# Earth's gravitational acceleration
-M2 = 2*1.455e-25			# 2*Sr mass in kg
-#d0 = 461.e-9				# A typical length scale in meters (Sr transition wavelength)
-d00 = 461.e-9
-d0 = d00/(2*pi)				# NOTE: THIS IS THE RIGHT CHARACTERISTIC LENGTH FOR LATTICE RECOIL UNITS!
-k0 = 1./d0					# Sr transition k-vector length
-mu = 2.58e-29				# Sr 461 dipole strength in meter second Amperes
-fSr = C/d0					# Sr 461 transition frequency in Hz					= 6.503 e14
-wSr = fSr*2*pi				# Sr 461 transition angular frequency				= 4.086 e15
-f0 = hbar/(M2*d0**2)		# Sr 461 characteristic frequency hbar/(2*m*d0^2)	= 1.705 e3
-w0 = f0*2*pi				# Sr 461 characteristic angular frequency			= 1.071 e4
-U0 = hbar*f0				# Sr 461 characteristic energy						= 1.798 e-31
-E0 = U0/mu					# Sr 461 characteristic electric field				= 6.970 e-3
-a0 = d0*f0**2				# Sr 461 characteristic acceleration				= 1.340
-Ug = g*d0*M2				# Sr 461 characteristic gravitational energy		= 1.316 e-30 = gSr*U0
-# Sr 461 units:
-wSr0 = wSr/w0				# Sr 461 frequency in 461 units						= 3.814 e11
-gSr = g/a0					# Gravitational acceleration in 461 units			= 7.318
-#---- Next are not "natural" but practical values
-delta_typical = 5e12		# Typical (optimized) detuning for 461 nm transition (in Hz)
-dtn0 = delta_typical/f0			# ... in 461 units = 2.93e9
-Etyp = sqrt(2*dtn0*gSr)		# Corresponding typical electric field = 2.07e5 in 461 units
-#Note: We want lattice amplitude to be >= gravitational potential accross d0
-# => E^2/2dtn0 >= gSr (times d0 times M2, both 1)
-# => E >= sqrt(2*dtn0*gSr) = 2.1e5 (= 2.1e5 E0 = 1444 in MKS)
-# => power/area (magnitude of Poynting vector) > 1444^2/(2*eta0) = 2765 W/m^2 = .2765 W/cm^2
-# This is a reasonable laser intensity
+if 1:		# Units.  I'm wrapping this in a conditional so I can block it and collapse it in Notepad++/Geany
+	# MKS units:
+	hbar = 1.05457e-34
+	C = 299792458.0
+	eps0 = 8.85418782e-12
+	mu0 = 4.e-7*pi
+	eta0 = 377					# Impedance of free space
+	g = 9.81					# Earth's gravitational acceleration
+	M2 = 2*1.455e-25			# 2*Sr mass in kg
+	d00 = 461.e-9				# A typical length scale in meters (Sr transition wavelength)
+	d0 = d00/(2*pi)				# NOTE: THIS IS THE RIGHT CHARACTERISTIC LENGTH FOR LATTICE RECOIL UNITS!
+	k0 = 1./d0					# Sr transition k-vector length
+	mu = 2.58e-29				# Sr 461 dipole strength in meter second Amperes
+	fSr = C/d0					# Sr 461 transition frequency in Hz					= 6.503 e14
+	wSr = fSr*2*pi				# Sr 461 transition angular frequency				= 4.086 e15
+	f0 = hbar/(M2*d0**2)		# Sr 461 characteristic frequency hbar/(2*m*d0^2)	= 1.705 e3
+	w0 = f0*2*pi				# Sr 461 characteristic angular frequency			= 1.071 e4
+	U0 = hbar*f0				# Sr 461 characteristic energy						= 1.798 e-31
+	E0 = U0/mu					# Sr 461 characteristic electric field				= 6.970 e-3
+	a0 = d0*f0**2				# Sr 461 characteristic acceleration				= 1.340
+	Ug = g*d0*M2				# Sr 461 characteristic gravitational energy		= 1.316 e-30 = gSr*U0
+	############## Sr 461 units:
+	wSr0 = wSr/w0				# Sr 461 frequency in 461 units						= 3.814 e11
+	gSr = g/a0					# Gravitational acceleration in 461 units			= 7.318
+	############## Next are not "natural" but practical values
+	delta_typical = 5e12		# Typical (optimized) detuning for 461 nm transition (in Hz)
+	dtn0 = delta_typical/f0			# ... in 461 units = 2.93e9
+	Etyp = sqrt(2*dtn0*gSr)		# Corresponding typical electric field = 2.07e5 in 461 units
+	#Note: We want lattice amplitude to be >= gravitational potential accross d0
+	# => E^2/2dtn0 >= gSr (times d0 times M2, both 1)
+	# => E >= sqrt(2*dtn0*gSr) = 2.1e5 (= 2.1e5 E0 = 1444 in MKS)
+	# => power/area (magnitude of Poynting vector) > 1444^2/(2*eta0) = 2765 W/m^2 = .2765 W/cm^2
+	# This is a reasonable laser intensity
 
-# Default laser parameters:
-stheta = pi/8				# Default angle for the lasers
-sk1 = array([cos(stheta),sin(stheta)])
-sk2 = array([cos(stheta),-sin(stheta)])
-sk3 = array([-1.0,0.0])
-sE1 = Etyp; sE2 = Etyp; sE3 = Etyp;
-sy1 = 0; sy2 = 0; sy3 = 0;	# Phase
-sw1 = wSr0 + dtn0; sw2 = wSr0 + dtn0; sw3 = lambda t: wSr0 + dtn0 + 10.*t; 	# Angular frequency
-# NOTE: 'Angular frequency' w is really (1/t) * int_0^t W(t')dt', where W(t') is the true instantaneous angular frequency
+if 1:		# Defaults
+	# Default laser parameters:
+	stheta = pi/8				# Default angle for the lasers
+	sk1 = array([cos(stheta),sin(stheta)])
+	sk2 = array([cos(stheta),-sin(stheta)])
+	sk3 = array([-1.0,0.0])
+	sE1 = Etyp; sE2 = Etyp; sE3 = Etyp;
+	sy1 = 0; sy2 = 0; sy3 = 0;	# Phase
+	sw1 = wSr0 + dtn0; sw2 = wSr0 + dtn0; sw3 = lambda t: wSr0 + dtn0 + 10.*t; 	# Angular frequency
+	# NOTE: 'Angular frequency' w is really (1/t) * int_0^t W(t')dt', where W(t') is the true instantaneous angular frequency
 
-std =  {'k1':sk1,'w1':sw1,'y1':sy1,'E1':sE1,
-		'k2':sk2,'w2':sw2,'y2':sy2,'E2':sE2,
-		'k3':sk3,'w3':sw3,'y3':sy3,'E3':sE3,
-		'grav':None,'wr':wSr0,'aa':1.0}
+	std =  {'k1':sk1,'w1':sw1,'y1':sy1,'E1':sE1,
+			'k2':sk2,'w2':sw2,'y2':sy2,'E2':sE2,
+			'k3':sk3,'w3':sw3,'y3':sy3,'E3':sE3,
+			'grav':None,'wr':wSr0,'aa':1.0}
 
 def funcify(a):
 	''' Makes argument into a function of time .
@@ -119,32 +120,30 @@ def shift(A,n,axis=0,method=0):
 	'''Shifts array A by n indices along axis 'axis', zeroing indices that "fall off", using method 'method'.
 		The default method=2 is about twice as fast as method=1 is about twice as fast
 		as method=0.'''
-	
-	if method==0:
-		B = zeros(A.shape,A.dtype)
-		if n==0:
-			B[:] = A[:]
-		elif n>0:
-			slcb = [slice(None)]*B.ndim
-			slca = slcb.copy()
-			slcb[axis] = slice(n,None)
-			slca[axis] = slice(0,-n)
-			B[slcb] = A[slca]
-		else:
-			slcb = [slice(None)]*B.ndim
-			slca = slcb.copy()
-			slcb[axis] = slice(0,n)
-			slca[axis] = slice(-n,None)
-			B[slcb] = A[slca]
-		return B
+	B = zeros(A.shape,A.dtype)
+	if n==0:
+		B[:] = A[:]
+	elif n>0:
+		slcb = [slice(None)]*B.ndim
+		slca = slcb.copy()
+		slcb[axis] = slice(n,None)
+		slca[axis] = slice(0,-n)
+		B[slcb] = A[slca]
+	else:
+		slcb = [slice(None)]*B.ndim
+		slca = slcb.copy()
+		slcb[axis] = slice(0,n)
+		slca[axis] = slice(-n,None)
+		B[slcb] = A[slca]
+	return B
 
 
 ################### 2D band structure ############################
 """ Taken from bands.py """
 
-def dia2(q,bs,amps,n,ys=[0,0,0],M=True,DP=[0.,0.]):
+def LHam(q,bs,amps,n,ys=[0,0,0],M=True,DP=[0.,0.]):
 	'''Returns a k-space matrix Hamiltonian for an optical lattice.
-		* q is a vector in the 1st Brillioun zone.
+		* q is a quasimomentum vector in the 1st Brillioun zone.
 		* bs is a 2-tuple of k-space basis vectors
 		* amps is a 3-iterable of amplitudes.  amps[0] and amps[1] 
 			correspond to bs[0] and bs[1], and amps[2] corresponds to
@@ -200,7 +199,7 @@ def eigs2(q,bs,amps,nbands,ys=[0,0,0],n=None,returnM=False,wind=False,DP=[0.,0.]
 		'''
 	if n is None:
 		n = nbands
-	M = dia2(q,bs,amps,n,ys,DP)			# Get the Hamiltonian matrix
+	M = LHam(q,bs,amps,n,ys,DP)			# Get the Hamiltonian matrix
 	# Amin is the bottom of the lattice potential, and a lower bound on the eigenenergies.  This is needed for eigsh
 	Amin = -abs(amps[0])-abs(amps[1])-abs(amps[2])
 	eigvals,eigvecs = eigsh(M,nbands,sigma=Amin)
@@ -282,7 +281,7 @@ def HParams(k1=None,w1=None,y1=None,E1=None,		# First laser's k-vector, frequenc
 
 
 def avUniform(accel=0.,vel=0.,grav=gSr,gm=1.0,aa=1.0,
-				Run=True,q=[0.,0.],T=arange(0,3,.01),n=5,init=0,ret='cxyh',plt='cp',talk=False):
+				Run=True,q=[0.,0.],T=arange(0,3,.01),n=5,init=0,ret='cxyh',plt='p',talk=False):
 	'''Sets up (and optionally runs) a system with uniform acceleration + 
 		constant velocity shift.
 		Signs for acceleration and velocity are the same as signs for x coordinates.
@@ -525,109 +524,21 @@ def Dt(f,t0,dt=1.e-6):
 	return (f(t0+dt) - f(t0-dt))/(2.*dt)
 
 
-def LFrame(c,px,py,ham,t,T=None,mode=2):
-	if T is not None:
-		'''Providing T means t is an index, and T[t] is the actual time.'''
-		c = c[t];px=px[t];py=py[t];
-		t = T[t]
-	if mode==1:
-		''' Shifts c to lattice frame at time t.
-		'''
-		k = ham['k']; w = ham['w']; dwdt = Dt(w,t);
-		kDual = dual(k)
-		xtrans = (kDual[:,0]*w(t)[0] + k[:,1]*w(t)[1] )/(2*pi)
-		c2 = c * exp(1j * (px*xtrans[0] + py*xtrans[1])*t)
-		ktrans = .5*xtrans + .5*(kDual[:,0]*dwdt[0] + k[:,1]*dwdt[1])*t/(2*pi)
-		px2 = px-ktrans[0]
-		py2 = py-ktrans[1]
-		return c2,px2,py2
-	elif mode==2:
-		''' Shifts c to lattice frame at time t via Galilean boost.
-		'''
-		k = ham['k']; w = ham['w']; dwdt = Dt(w,t);
-		kDual = dual(k)
-		v = kDual.dot((w(t) + dwdt*t)[:2])/2./pi; v2 = v.dot(v)	# Velocity of Galilean boost
-		c2 = exp(1j*v2*t/4.)*exp(1j*(px*v[0]+py*v[1])*t)*c		# Translation part of boost
-		px2 = px - .5*v[0]; py2 = py - .5*v[1]					# Momentum shift part of boost
-		return c2,px2,py2
-
-def qProj(c,px,py,ham,t,band=0,T=None):
-	if T is not None:		# This indicates that t is an index, and the true time is T[t]
-		c = c[t]; px = px[t]; py = py[t]; t = T[t]
-	k = ham['k']; A = ham['A']; y = ham['y']; w = ham['w']; dwdt = Dt(w,t);
-	kDual = dual(k)
-	v = kDual.dot((w(t) + dwdt*t)[:2])/2./pi; v2 = v.dot(v)	# Velocity of Galilean boost
-	c2 = exp(1j*v2*t/4.)*exp(1j*(px*v[0]+py*v[1])*t)*c		# Translation part of boost
-	px2 = px - .5*v[0]; py2 = py - .5*v[1]					# Momentum shift part of boost
-	
-	N = c2.shape[0]; n=(N-1)/2
-	q = array([px2[n,n],py2[n,n]])
-	ph = y(t) - w(t)*t + k.T.dot(v)*t		# Phase of lattice in rest frame
-	if not hasattr(band,'__len__'):
-		band = array([band])
-	evec = eigs2(q,k.T,A(t),amax(band)+1,ph,n=n,wind=True)[1][band]
-	out = []
-	for i in range(len(band)):
-		out.append(abs(sum(evec[i].conj() * c2))**2)
-	return array(out),ph,q,v,dwdt,w(t)
-
-def SFrame(c,px,py,ham,t,T=None,band=None):
-	if T is not None:
-		c = c[t]; px = px[t]; py = py[t]; t = T[t];
-	k = ham['k']; A = ham['A']; w = ham['w']; y = ham['y'];
-	kDual = dual(k,1.)								# Note normalization is 1, not 2*pi
-	B = lambda t: kDual.dot((w(t)*t-y(t))[:2])		# Need B as lambda to get dBdt
-	dBdt = Dt(B,t)
-	B = B(t)			# This is the only value of B we'll need now
-	c2 = exp(1.j*(px*B[0]+py*B[1]))*c
-	px2 = px - .5*dBdt[0]
-	py2 = py - .5*dBdt[1]
-	if band is None:
-		return c2,px2,py2
-	else:
-		if not hasattr(band,'__len__'):
-			band = array([band])
-		N = c2.shape[0]; n = (N-1)/2
-		q = [px2[n,n],py2[n,n]]
-		evec = eigs2(q,k.T,A(t),amax(band)+1,n=n,wind=True)[1]
-		out = []
-		for i in band:
-			out.append( abs(sum( evec[i].conj()*c2 ))**2 )
-		out = array(out)
-		return out
-
-def SProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False):
-	if not c.shape==px.shape==py.shape and c.shape[0]==len(T):
-		raise ValueError('c, px, py, and T do not have consistent shapes.')
-	L = c.shape[0]
-	if not hasattr(band,'__len__'):
-		band = array([band])
-	nb = band.shape[0]
-	idx = range(L)[idx]
-	L = len(idx)
-	out = zeros((L,nb))
-	for i in range(L):
-		j = idx[i]
-		if talk:
-			print('step {} of {}'.format(i,L))
-		out[i] = SFrame(c[j],px[j],py[j],ham,T[j],band=band)
-	return out
-
 def nFrame(c,px,py,ham,t,band,T=None):
 	if T is not None:
 		c = c[t]; px = px[t]; py = py[t]; t = T[t];
-	k = ham['k']; A = ham['A']; w = ham['w']; y = ham['y'];
+	k = ham['k']; A = ham['A']; w = ham['w']; y = ham['y']; p_g = ham['p_g']
 	kDual = dual(k,1.)								# Note normalization is 1, not 2*pi
 	if not hasattr(band,'__len__'): band = array([band])
 	N = c.shape[0]; n = (N-1)/2
 	q = [px[n,n],py[n,n]]
-	evec = eigs2(q,k.T,A(t),amax(band)+1,n=n,wind=True)[1]
+	evec = eigs2(q,k.T,A(t),amax(band)+1,ys=y(t)-w(t)*t,DP=p_g(t),n=n,wind=True)[1]
 	out = []
 	for i in band:
 		out.append( abs(sum( evec[i].conj()*c ))**2 )
 	return array(out)
 
-def nProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False):
+def nProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False,plt=True,ret=False):
 	if not c.shape==px.shape==py.shape and c.shape[0]==len(T):
 		raise ValueError('c, px, py, and T do not have consistent shapes.')
 	L = c.shape[0]
@@ -644,26 +555,11 @@ def nProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False):
 		if talk:
 			print('step {} of {}'.format(i,L))
 		out[i] = nFrame(c[j],px[j],py[j],ham,T[j],band)
-	return out
-
-"""
-def qProj(c,px,py,ham,t=None,band=0,q=None,show=False):
-	'''Projects onto lattice eigenstates for quasimomentum q.
-		If q is not supplied, it is inferred from px and py.
-		If t is supplied, it is assumed that the input values
-		of c, px, and py are for the lab frame, and they are
-		transformed automatically into the lattice frame. 
-	'''
-	k = ham['k']
-	if t is not None:
-		c,px,py = LFrame(c,px,py,t,ham)
-	N = c.shape[0]
-	n = (N-1)/2
-	if q is None:
-		q = array([px[n,n],py[n,n]])
-	evec = eigs2(q,(k[:,0],k[:,1]),ham['A'](t),band+1,ys=ham['y'](t),n=n,wind=True)[1][band]
-	if show:
-		bars(evec)
-		bars(c)
-	return sum(evec.conj() * c)
-"""
+	if plt:
+		if plt is int(plt):	
+			figure(int)
+		else:
+			figure()
+		plot(out)
+	if ret:
+		return out
