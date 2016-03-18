@@ -457,4 +457,3 @@ def Eproj(c,p,t,ham,T=None,band=5):
 		band = array([band])
 	N = c.shape[0]; n = (N-1)/2;
 	e,v = eigs1
-	"""
