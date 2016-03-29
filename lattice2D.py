@@ -141,7 +141,7 @@ def shift(A,n,axis=0,method=0):
 ################### 2D band structure ############################
 """ Taken from bands.py """
 
-def LHam(q,bs,amps,n,ys=[0,0,0],M=True,DP=[0.,0.]):
+def LHam(q,bs,amps,n,ys=[0,0,0],DP=[0.,0.],M=True):
 	'''Returns a k-space matrix Hamiltonian for an optical lattice.
 		* q is a quasimomentum vector in the 1st Brillioun zone.
 		* bs is a 2-tuple of k-space basis vectors
@@ -233,7 +233,7 @@ def HParams(k1=None,w1=None,y1=None,E1=None,		# First laser's k-vector, frequenc
 			k2=None,w2=None,y2=None,E2=None,		# Second laser
 			k3=None,w3=None,y3=None,E3=None,		# Third laser
 			grav=None,delta=None,wr=None,aa=1.0,	# Grav. accel., detuning, resonant ang. freq., lattice depth multiplier
-			d=std):	
+			Er=1.0,d=std):	
 	''' Takes in laser parameters and spits out lattice Hamiltonian parameters
 		(for momentum space Schrodinger equation).
 		d is a dictionary for input parameters.  Values in d are overriden by
@@ -266,7 +266,7 @@ def HParams(k1=None,w1=None,y1=None,E1=None,		# First laser's k-vector, frequenc
 	k = array([d['k1']-d['k2'],d['k2']-d['k3'],d['k3']-d['k1']]).T		########## MIGHT TRANSPOSE THIS
 	w = lambda t: array([d['w1'](t)-d['w2'](t),d['w2'](t)-d['w3'](t),d['w3'](t)-d['w1'](t)])
 	y = lambda t: array([d['y1'](t)-d['y2'](t),d['y2'](t)-d['y3'](t),d['y3'](t)-d['y1'](t)])
-	A = lambda t: d['aa']*array([d['E1'](t)*d['E2'](t),d['E2'](t)*d['E3'](t),d['E3'](t)*d['E1'](t)])/(2.*d['delta'])
+	A = lambda t: d['aa']*array([d['E1'](t)*d['E2'](t),d['E2'](t)*d['E3'](t)/Er,d['E3'](t)*d['E1'](t)/Er])/(2.*d['delta'])
 	
 	if grav is not None:
 		p_g = lambda t: array([0,grav*t/2.])	# Gravitational shift to momentum
@@ -280,7 +280,7 @@ def HParams(k1=None,w1=None,y1=None,E1=None,		# First laser's k-vector, frequenc
 	return ham
 
 
-def avUniform(accel=0.,vel=0.,grav=gSr,gm=1.0,aa=1.0,
+def avUniform(accel=0.,vel=0.,grav=gSr,gm=1.0,aa=1.0,Er=1.0,
 				Run=True,q=[0.,0.],T=arange(0,3,.01),n=5,init=0,ret='cxyh',plt='p',talk=False):
 	'''Sets up (and optionally runs) a system with uniform acceleration + 
 		constant velocity shift.
@@ -289,6 +289,8 @@ def avUniform(accel=0.,vel=0.,grav=gSr,gm=1.0,aa=1.0,
 			supplied.  This is so you can just take the default value of grav and
 			scale it. 
 		aa is an overall multiplier for the lattice depth
+		Er is a scaling for the electric field strength of laser 3, effectively 
+			equivalent to E3/=Er.
 		run determines whether to run or just return Hamiltonian parameters.
 		ret determines what to return: 'c' means coefficients, 'x' means 
 			x momenta, 'y' means y momenta, 'h' means Hamiltonian parameters.
@@ -299,7 +301,7 @@ def avUniform(accel=0.,vel=0.,grav=gSr,gm=1.0,aa=1.0,
 	w1 = lambda t: wSr0 + dtn0
 	w2 = lambda t: wSr0 + dtn0
 	w3 = lambda t: wSr0 + dtn0 + vel - accel*t
-	h = HParams(w1=w1,w2=w2,w3=w3,grav=G,aa=aa,delta=dtn0)
+	h = HParams(w1=w1,w2=w2,w3=w3,grav=G,aa=aa,Er=Er,delta=dtn0)
 	
 	if Run:
 		c,px,py = psolver(h,q,T,n=n,init=init,talk=talk)
@@ -563,3 +565,38 @@ def nProj(c,px,py,ham,T,idx=slice(None),band=0,talk=False,plt=True,ret=False):
 		plot(out)
 	if ret:
 		return out
+
+def bandProj(c,px,py,ham,t,band,T=None):
+	if T is not None:
+		c = c[t]; px = px[t]; py = py[t]; t = T[t];
+	k = ham['k']; A = ham['A']; w = ham['w']; y = ham['y']; p_g = ham['p_g']
+	kDual = dual(k,1.)								# Note normalization is 1, not 2*pi
+	if not hasattr(band,'__len__'): band = array([band])
+	N = c.shape[0]; n = (N-1)/2
+	q = [px[n,n],py[n,n]]
+	eeng,evec = eigs2(q,k.T,A(t),amax(band)+1,ys=y(t)-w(t)*t,DP=p_g(t),n=n,wind=True)
+	out = []
+	for i in band:
+		out.append( abs(sum( evec[i].conj()*c ))**2 )
+	return array(out),eeng
+
+
+def LZview(c,px,py,ham,T,idx=slice(None),band=[0,1],talk=True,plt='p',ret=False):
+	band = array(band)
+	nb = band.shape[0]
+	idx = range(c.shape[0])[idx]
+	L = len(idx)
+	proj = zeros((L,nb))
+	engs = zeros((L,nb))
+	for i in range(L):
+		j = idx[i]
+		if talk: print('step {} of {}'.format(i,L))
+		proj[i],engs[i] = bandProj(c[j],px[j],py[j],ham,T[j],band)
+	
+	for i in plt:
+		if i=='p':		# Plot bands and projections
+			figure()
+			plot(engs)
+			plot(proj,'.')
+	if ret:
+		return proj,engs

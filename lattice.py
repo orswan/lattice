@@ -643,3 +643,4 @@ def qProj(c,px,py,ham,t=None,band=0,q=None,show=False):
 		bars(c)
 	return sum(evec.conj() * c)
 =======
+"""
